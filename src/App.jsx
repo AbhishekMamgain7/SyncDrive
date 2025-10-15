@@ -9,11 +9,12 @@ import Dashboard from './components/dashboard/Dashboard';
 import MemoryManagement from './components/os/MemoryManagement';
 import ProcessScheduling from './components/os/ProcessScheduling';
 import DeadlockDetection from './components/os/DeadlockDetection';
+import AuthPage from './components/auth/AuthPage';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
 const MainApp = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('files');
 
   const renderContent = () => {
@@ -34,33 +35,14 @@ const MainApp = () => {
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className="auth-container">
-        <motion.div
-          className="auth-card"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="text-center mb-4">
-            <h2 className="fw-bold">Welcome to SyncDrive</h2>
-            <p className="text-muted">Multi-user File Management System with OS Simulation</p>
-          </div>
-          <div className="text-center">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Loading...</span>
-            </div>
-            <p className="mt-2 text-muted">Initializing system...</p>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <AuthPage />;
   }
 
   return (
     <div className="app-container">
       <Header 
         user={user} 
+        onLogout={logout}
         activeTab={activeTab} 
         setActiveTab={setActiveTab}
       />

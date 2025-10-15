@@ -131,10 +131,12 @@ const Header = ({ user, onLogout, activeTab, setActiveTab }) => {
             <FaCog size={18} />
           </motion.button>
 
-          <div className="dropdown">
+          <div className="dropdown d-flex align-items-center">
             <motion.button
+              type="button"
               className="nav-link dropdown-toggle btn btn-link text-white d-flex align-items-center rounded-3 px-3 py-2 mx-1"
               data-bs-toggle="dropdown"
+              aria-expanded="false"
               whileHover={{ 
                 scale: 1.05, 
                 backgroundColor: 'rgba(255,255,255,0.15)',

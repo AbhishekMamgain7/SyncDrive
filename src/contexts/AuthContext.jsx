@@ -15,47 +15,82 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Mock authentication - in real app, this would connect to backend
+  // Initialize from localStorage
   useEffect(() => {
-    const mockUser = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'admin',
-      permissions: ['read', 'write', 'delete', 'share', 'admin'],
-      avatar: null,
-      lastLogin: new Date().toISOString()
-    };
-
-    // Simulate loading
-    setTimeout(() => {
-      setUser(mockUser);
-      setIsAuthenticated(true);
+    try {
+      const storedUser = localStorage.getItem('auth_user');
+      const token = localStorage.getItem('auth_token');
+      if (storedUser && token) {
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+        setIsAuthenticated(true);
+      }
+    } catch (_) {
+      // ignore
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   }, []);
 
   const login = async (email, password) => {
     setLoading(true);
     try {
-      // Mock login - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockUser = {
-        id: '1',
-        name: 'John Doe',
-        email: email,
-        role: 'admin',
-        permissions: ['read', 'write', 'delete', 'share', 'admin'],
-        avatar: null,
-        lastLogin: new Date().toISOString()
-      };
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data?.error || 'Login failed' };
 
-      setUser(mockUser);
+      const authedUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role || 'user',
+        permissions: data.user.permissions || ['read', 'write', 'share'],
+        avatar: null,
+        lastLogin: new Date().toISOString(),
+      };
+      localStorage.setItem('auth_user', JSON.stringify(authedUser));
+      localStorage.setItem('auth_token', data.token);
+      setUser(authedUser);
       setIsAuthenticated(true);
-      return { success: true, user: mockUser };
+      return { success: true, user: authedUser };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: error?.message || 'Login failed' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signup = async ({ name, email, password }) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data?.error || 'Signup failed' };
+
+      const authedUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: data.user.role || 'user',
+        permissions: data.user.permissions || ['read', 'write', 'share'],
+        avatar: null,
+        lastLogin: new Date().toISOString(),
+      };
+      localStorage.setItem('auth_user', JSON.stringify(authedUser));
+      localStorage.setItem('auth_token', data.token);
+      setUser(authedUser);
+      setIsAuthenticated(true);
+      return { success: true, user: authedUser };
+    } catch (error) {
+      return { success: false, error: error?.message || 'Signup failed' };
     } finally {
       setLoading(false);
     }
@@ -66,6 +101,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     // Clear any stored tokens or session data
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
   };
 
   const hasPermission = (permission) => {
@@ -85,6 +121,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAuthenticated,
     login,
+    signup,
     logout,
     hasPermission,
     hasRole,
