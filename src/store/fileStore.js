@@ -1,108 +1,64 @@
 import { create } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+
+const API_BASE_URL = '/api/files';
+
+// Helper function to get auth token
+const getAuthToken = () => localStorage.getItem('auth_token');
+
+// Helper function to create axios config with auth
+const getAuthConfig = () => ({
+  headers: {
+    'Authorization': `Bearer ${getAuthToken()}`
+  }
+});
 
 const useFileStore = create((set, get) => ({
   // State
   files: [],
-  folders: [],
-  currentPath: '/',
   selectedItems: [],
   searchQuery: '',
   viewMode: 'grid', // 'grid' or 'list'
   sortBy: 'name', // 'name', 'size', 'date'
   sortOrder: 'asc', // 'asc' or 'desc'
   isLoading: false,
+  isUploading: false,
   error: null,
+  currentPath: [{ id: null, name: 'Home' }], // Breadcrumb trail
 
-  // Mock data initialization
-  initializeData: () => {
-    const mockFolders = [
-      {
-        id: uuidv4(),
-        name: 'Documents',
-        type: 'folder',
-        path: '/Documents',
-        size: 0,
-        createdAt: new Date('2024-01-01'),
-        modifiedAt: new Date('2024-01-15'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        children: []
-      },
-      {
-        id: uuidv4(),
-        name: 'Images',
-        type: 'folder',
-        path: '/Images',
-        size: 0,
-        createdAt: new Date('2024-01-02'),
-        modifiedAt: new Date('2024-01-16'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        children: []
-      },
-      {
-        id: uuidv4(),
-        name: 'Projects',
-        type: 'folder',
-        path: '/Projects',
-        size: 0,
-        createdAt: new Date('2024-01-03'),
-        modifiedAt: new Date('2024-01-17'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        children: []
+  // API Actions
+  fetchFiles: async (parentId = null) => {
+    set({ isLoading: true, error: null });
+    
+    try {
+      const url = parentId 
+        ? `${API_BASE_URL}?parentId=${parentId}`
+        : API_BASE_URL;
+      
+      const response = await axios.get(url, getAuthConfig());
+      
+      if (response.data.success) {
+        set({ 
+          files: response.data.data || [],
+          isLoading: false,
+          error: null
+        });
+      } else {
+        throw new Error(response.data.error || 'Failed to fetch files');
       }
-    ];
-
-    const mockFiles = [
-      {
-        id: uuidv4(),
-        name: 'README.md',
-        type: 'file',
-        path: '/README.md',
-        size: 1024,
-        createdAt: new Date('2024-01-01'),
-        modifiedAt: new Date('2024-01-15'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        extension: 'md',
-        mimeType: 'text/markdown'
-      },
-      {
-        id: uuidv4(),
-        name: 'project-plan.docx',
-        type: 'file',
-        path: '/Documents/project-plan.docx',
-        size: 2048,
-        createdAt: new Date('2024-01-10'),
-        modifiedAt: new Date('2024-01-16'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        extension: 'docx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      },
-      {
-        id: uuidv4(),
-        name: 'screenshot.png',
-        type: 'file',
-        path: '/Images/screenshot.png',
-        size: 5120,
-        createdAt: new Date('2024-01-12'),
-        modifiedAt: new Date('2024-01-17'),
-        owner: 'John Doe',
-        permissions: ['read', 'write'],
-        extension: 'png',
-        mimeType: 'image/png'
-      }
-    ];
-
-    set({ folders: mockFolders, files: mockFiles });
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load files';
+      set({ 
+        error: errorMessage,
+        isLoading: false,
+        files: []
+      });
+      toast.error(errorMessage);
+    }
   },
 
-  // Actions
-  setCurrentPath: (path) => set({ currentPath: path }),
-  
+  // UI State Actions
   setSelectedItems: (items) => set({ selectedItems: items }),
   
   setSearchQuery: (query) => set({ searchQuery: query }),
@@ -113,145 +69,176 @@ const useFileStore = create((set, get) => ({
   
   setSortOrder: (order) => set({ sortOrder: order }),
 
-  // File operations
-  createFolder: (name, parentPath = '/') => {
-    const newFolder = {
-      id: uuidv4(),
-      name,
-      type: 'folder',
-      path: `${parentPath}/${name}`.replace(/\/+/g, '/'),
-      size: 0,
-      createdAt: new Date(),
-      modifiedAt: new Date(),
-      owner: 'John Doe',
-      permissions: ['read', 'write'],
-      children: []
-    };
+  updateCurrentPath: (newPath) => set({ currentPath: newPath }),
 
-    set(state => ({
-      folders: [...state.folders, newFolder]
-    }));
+  navigateToFolder: (folder) => {
+    const state = get();
+    const newPath = [...state.currentPath, { id: folder.id, name: folder.name }];
+    set({ currentPath: newPath });
+    get().fetchFiles(folder.id);
+  },
+
+  navigateToBreadcrumb: (pathItem, index) => {
+    const state = get();
+    const newPath = state.currentPath.slice(0, index + 1);
+    set({ currentPath: newPath });
+    get().fetchFiles(pathItem.id);
+  },
+
+  // File Operations with API
+  createFolder: async (name, parentId = null) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/folder`,
+        { name, parentId },
+        getAuthConfig()
+      );
+
+      if (response.data.success) {
+        toast.success('Folder created successfully');
+        // Refresh the current view
+        const state = get();
+        const currentFolderId = state.currentPath[state.currentPath.length - 1].id;
+        await get().fetchFiles(currentFolderId);
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to create folder');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create folder';
+      toast.error(errorMessage);
+      throw error;
+    }
+  },
+
+  deleteItems: async (itemIds) => {
+    try {
+      // Delete all selected items
+      await Promise.all(
+        itemIds.map(id => 
+          axios.delete(`${API_BASE_URL}/${id}`, getAuthConfig())
+        )
+      );
+
+      toast.success(`Deleted ${itemIds.length} item(s)`);
+      
+      // Refresh the current view
+      const state = get();
+      const currentFolderId = state.currentPath[state.currentPath.length - 1].id;
+      await get().fetchFiles(currentFolderId);
+      
+      set({ selectedItems: [] });
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete items';
+      toast.error(errorMessage);
+      throw error;
+    }
+  },
+
+  renameItem: async (itemId, newName) => {
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/${itemId}`,
+        { name: newName },
+        getAuthConfig()
+      );
+
+      if (response.data.success) {
+        toast.success('Renamed successfully');
+        
+        // Refresh the current view
+        const state = get();
+        const currentFolderId = state.currentPath[state.currentPath.length - 1].id;
+        await get().fetchFiles(currentFolderId);
+        
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to rename');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to rename item';
+      toast.error(errorMessage);
+      throw error;
+    }
+  },
+
+  uploadFile: async (file, parentId = null) => {
+    set({ isUploading: true });
     
-    return newFolder;
-  },
+    try {
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      if (parentId) {
+        formData.append('parentId', parentId);
+      }
 
-  uploadFile: (file, parentPath = '/') => {
-    const newFile = {
-      id: uuidv4(),
-      name: file.name,
-      type: 'file',
-      path: `${parentPath}/${file.name}`.replace(/\/+/g, '/'),
-      size: file.size,
-      createdAt: new Date(),
-      modifiedAt: new Date(),
-      owner: 'John Doe',
-      permissions: ['read', 'write'],
-      extension: file.name.split('.').pop(),
-      mimeType: file.type
-    };
+      // Upload file to backend
+      const response = await axios.post(
+        `${API_BASE_URL}/upload`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${getAuthToken()}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
 
-    set(state => ({
-      files: [...state.files, newFile]
-    }));
-    
-    return newFile;
-  },
-
-  deleteItems: (itemIds) => {
-    set(state => ({
-      files: state.files.filter(file => !itemIds.includes(file.id)),
-      folders: state.folders.filter(folder => !itemIds.includes(folder.id)),
-      selectedItems: []
-    }));
-  },
-
-  moveItems: (itemIds, destinationPath) => {
-    set(state => ({
-      files: state.files.map(file => 
-        itemIds.includes(file.id) 
-          ? { ...file, path: `${destinationPath}/${file.name}`, modifiedAt: new Date() }
-          : file
-      ),
-      folders: state.folders.map(folder => 
-        itemIds.includes(folder.id) 
-          ? { ...folder, path: `${destinationPath}/${folder.name}`, modifiedAt: new Date() }
-          : folder
-      )
-    }));
-  },
-
-  renameItem: (itemId, newName) => {
-    set(state => ({
-      files: state.files.map(file => 
-        file.id === itemId 
-          ? { ...file, name: newName, path: file.path.replace(/\/[^\/]+$/, `/${newName}`), modifiedAt: new Date() }
-          : file
-      ),
-      folders: state.folders.map(folder => 
-        folder.id === itemId 
-          ? { ...folder, name: newName, path: folder.path.replace(/\/[^\/]+$/, `/${newName}`), modifiedAt: new Date() }
-          : folder
-      )
-    }));
+      if (response.data.success) {
+        toast.success(`File "${file.name}" uploaded successfully`);
+        
+        // Refresh the current view to show the new file
+        const state = get();
+        const currentFolderId = state.currentPath[state.currentPath.length - 1].id;
+        await get().fetchFiles(currentFolderId);
+        
+        set({ isUploading: false });
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to upload file');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to upload file';
+      toast.error(errorMessage);
+      set({ isUploading: false });
+      throw error;
+    }
   },
 
   // Computed values
-  getCurrentItems: () => {
+  getFilteredAndSortedFiles: () => {
     const state = get();
-    const path = state.currentPath;
-    
-    let currentFiles = state.files.filter(file => 
-      file.path.startsWith(path) && 
-      file.path.substring(path.length + 1).split('/').length === 1
-    );
-    
-    let currentFolders = state.folders.filter(folder => 
-      folder.path.startsWith(path) && 
-      folder.path.substring(path.length + 1).split('/').length === 1
-    );
+    let items = [...state.files];
 
     // Apply search filter
     if (state.searchQuery) {
       const query = state.searchQuery.toLowerCase();
-      currentFiles = currentFiles.filter(file => 
-        file.name.toLowerCase().includes(query)
-      );
-      currentFolders = currentFolders.filter(folder => 
-        folder.name.toLowerCase().includes(query)
+      items = items.filter(item => 
+        item.name.toLowerCase().includes(query)
       );
     }
 
     // Apply sorting
-    const allItems = [...currentFiles, ...currentFolders];
-    allItems.sort((a, b) => {
+    items.sort((a, b) => {
       let comparison = 0;
+      
+      // Sort folders first
+      if (a.type === 'folder' && b.type !== 'folder') return -1;
+      if (a.type !== 'folder' && b.type === 'folder') return 1;
       
       if (state.sortBy === 'name') {
         comparison = a.name.localeCompare(b.name);
       } else if (state.sortBy === 'size') {
-        comparison = a.size - b.size;
+        comparison = (a.size || 0) - (b.size || 0);
       } else if (state.sortBy === 'date') {
-        comparison = new Date(a.modifiedAt) - new Date(b.modifiedAt);
+        comparison = new Date(a.updatedAt) - new Date(b.updatedAt);
       }
       
       return state.sortOrder === 'desc' ? -comparison : comparison;
     });
 
-    return allItems;
-  },
-
-  getBreadcrumbs: () => {
-    const state = get();
-    const pathParts = state.currentPath.split('/').filter(part => part);
-    const breadcrumbs = [{ name: 'Home', path: '/' }];
-    
-    let currentPath = '';
-    pathParts.forEach(part => {
-      currentPath += `/${part}`;
-      breadcrumbs.push({ name: part, path: currentPath });
-    });
-    
-    return breadcrumbs;
+    return items;
   }
 }));
 

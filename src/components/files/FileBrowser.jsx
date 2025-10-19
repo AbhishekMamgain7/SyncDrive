@@ -15,21 +15,24 @@ import {
   FaEdit,
   FaShare,
   FaCopy,
-  FaCheck
+  FaCheck,
+  FaSpinner
 } from 'react-icons/fa';
 import useFileStore from '../../store/fileStore';
 
 const FileBrowser = () => {
   const {
     files,
-    folders,
+    isLoading,
+    isUploading,
+    error,
     currentPath,
     selectedItems,
     searchQuery,
     viewMode,
     sortBy,
     sortOrder,
-    setCurrentPath,
+    fetchFiles,
     setSelectedItems,
     setSearchQuery,
     setViewMode,
@@ -38,9 +41,10 @@ const FileBrowser = () => {
     createFolder,
     deleteItems,
     renameItem,
-    getCurrentItems,
-    getBreadcrumbs,
-    initializeData
+    uploadFile,
+    navigateToFolder,
+    navigateToBreadcrumb,
+    getFilteredAndSortedFiles
   } = useFileStore();
 
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -48,17 +52,38 @@ const FileBrowser = () => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [contextMenuItem, setContextMenuItem] = useState(null);
+  const [hoveredItem, setHoveredItem] = useState(null);
+  const fileInputRef = React.useRef(null);
 
+  // Load root directory on mount
   useEffect(() => {
-    initializeData();
-  }, [initializeData]);
+    fetchFiles(null);
+  }, []);
 
-  const currentItems = getCurrentItems();
-  const breadcrumbs = getBreadcrumbs();
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Delete key - delete selected items
+      if (e.key === 'Delete' && selectedItems.length > 0) {
+        handleDeleteSelected();
+      }
+      // Escape key - clear selection
+      if (e.key === 'Escape') {
+        setSelectedItems([]);
+        setShowContextMenu(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItems]);
+
+  const currentItems = getFilteredAndSortedFiles();
+  const breadcrumbs = currentPath;
 
   const handleItemClick = (item) => {
     if (item.type === 'folder') {
-      setCurrentPath(item.path);
+      navigateToFolder(item);
     }
   };
 
@@ -82,44 +107,105 @@ const FileBrowser = () => {
     setShowContextMenu(true);
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     if (newFolderName.trim()) {
-      createFolder(newFolderName.trim(), currentPath);
-      setNewFolderName('');
-      setShowCreateFolder(false);
+      try {
+        const currentFolderId = currentPath[currentPath.length - 1].id;
+        await createFolder(newFolderName.trim(), currentFolderId);
+        setNewFolderName('');
+        setShowCreateFolder(false);
+      } catch (error) {
+        // Error already handled by store
+      }
     }
   };
 
-  const handleDelete = () => {
-    if (selectedItems.length > 0) {
-      deleteItems(selectedItems);
-      setShowContextMenu(false);
+  const handleDeleteSelected = async () => {
+    if (selectedItems.length === 0) return;
+
+    const itemsToDelete = currentItems.filter(item => selectedItems.includes(item.id));
+    const itemNames = itemsToDelete.map(item => item.name).join(', ');
+    const itemCount = itemsToDelete.length;
+    const folderCount = itemsToDelete.filter(item => item.type === 'folder').length;
+    const fileCount = itemsToDelete.filter(item => item.type === 'file').length;
+
+    let confirmMessage = `Are you sure you want to delete ${itemCount} item(s)?\n\n`;
+    if (folderCount > 0) confirmMessage += `📁 Folders: ${folderCount}\n`;
+    if (fileCount > 0) confirmMessage += `📄 Files: ${fileCount}\n`;
+    if (folderCount > 0) confirmMessage += `\n⚠️ Warning: Deleting folders will also delete all their contents!`;
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteItems(selectedItems);
+        setShowContextMenu(false);
+      } catch (error) {
+        // Error already handled by store
+      }
+    }
+  };
+
+  const handleDeleteSingle = async (item) => {
+    const isFolder = item.type === 'folder';
+    let confirmMessage = `Are you sure you want to delete "${item.name}"?`;
+    if (isFolder) {
+      confirmMessage += '\n\n⚠️ Warning: This will also delete all files and folders inside it!';
+    }
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        await deleteItems([item.id]);
+        setShowContextMenu(false);
+      } catch (error) {
+        // Error already handled by store
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    // Trigger the hidden file input
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      try {
+        const currentFolderId = currentPath[currentPath.length - 1].id;
+        await uploadFile(file, currentFolderId);
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } catch (error) {
+        // Error already handled by store
+      }
     }
   };
 
   const getFileIcon = (file) => {
-    const extension = file.extension?.toLowerCase();
+    // Extract extension from file name
+    const extension = file.name?.split('.').pop()?.toLowerCase();
     
     switch (extension) {
       case 'pdf':
-        return <FaFile className="text-danger" />;
+        return <FaFile className="text-danger" size={48} />;
       case 'doc':
       case 'docx':
-        return <FaFile className="text-primary" />;
+        return <FaFile className="text-primary" size={48} />;
       case 'jpg':
       case 'jpeg':
       case 'png':
       case 'gif':
-        return <FaFile className="text-success" />;
+        return <FaFile className="text-success" size={48} />;
       case 'mp4':
       case 'avi':
       case 'mov':
-        return <FaFile className="text-warning" />;
+        return <FaFile className="text-warning" size={48} />;
       case 'mp3':
       case 'wav':
-        return <FaFile className="text-info" />;
+        return <FaFile className="text-info" size={48} />;
       default:
-        return <FaFile className="text-secondary" />;
+        return <FaFile className="text-secondary" size={48} />;
     }
   };
 
@@ -165,7 +251,7 @@ const FileBrowser = () => {
                   ) : (
                     <motion.button 
                       className="btn btn-link p-0 text-decoration-none text-muted"
-                      onClick={() => setCurrentPath(crumb.path)}
+                      onClick={() => navigateToBreadcrumb(crumb, index)}
                       whileHover={{ scale: 1.05, color: '#007bff' }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -285,19 +371,105 @@ const FileBrowser = () => {
 
           <motion.button 
             className="btn btn-success shadow-sm"
+            onClick={handleUploadClick}
+            disabled={isUploading}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <FaUpload className="me-1" />
-            Upload
+            {isUploading ? (
+              <>
+                <FaSpinner className="fa-spin me-1" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <FaUpload className="me-1" />
+                Upload
+              </>
+            )}
           </motion.button>
+
+          {/* Delete Button - Shows when items are selected */}
+          {selectedItems.length > 0 && (
+            <motion.button 
+              className="btn btn-danger shadow-sm"
+              onClick={handleDeleteSelected}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <FaTrash className="me-1" />
+              Delete ({selectedItems.length})
+            </motion.button>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+            accept="*/*"
+          />
         </motion.div>
       </motion.div>
 
       {/* File Grid/List */}
       <div className="flex-grow-1 p-4 overflow-auto bg-light">
-        <AnimatePresence mode="popLayout">
-          {viewMode === 'grid' ? (
+        {/* Loading State */}
+        {isLoading && (
+          <div className="d-flex justify-content-center align-items-center py-5">
+            <FaSpinner className="fa-spin text-primary me-2" size={24} />
+            <span className="text-muted">Loading files...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !isLoading && (
+          <motion.div
+            className="alert alert-danger mx-auto"
+            style={{ maxWidth: '600px' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <h5 className="alert-heading">Error Loading Files</h5>
+            <p className="mb-0">{error}</p>
+            <hr />
+            <button 
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => fetchFiles(currentPath[currentPath.length - 1].id)}
+            >
+              Try Again
+            </button>
+          </motion.div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && currentItems.length === 0 && (
+          <motion.div
+            className="text-center py-5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <FaFolder size={64} className="text-muted mb-3" />
+            <h5 className="text-muted">This folder is empty</h5>
+            <p className="text-muted">Upload files or create folders to get started</p>
+            <button 
+              className="btn btn-primary mt-3"
+              onClick={() => setShowCreateFolder(true)}
+            >
+              <FaPlus className="me-2" />
+              Create Folder
+            </button>
+          </motion.div>
+        )}
+
+        {/* Files and Folders */}
+        {!isLoading && !error && currentItems.length > 0 && (
+          <AnimatePresence mode="popLayout">
+            {viewMode === 'grid' ? (
             <div className="row g-4">
               {currentItems.map((item, index) => (
                 <motion.div
@@ -324,13 +496,15 @@ const FileBrowser = () => {
                     onClick={(e) => handleItemSelect(item, e)}
                     onDoubleClick={() => handleItemClick(item)}
                     onContextMenu={(e) => handleContextMenu(item, e)}
+                    onMouseEnter={() => setHoveredItem(item.id)}
+                    onMouseLeave={() => setHoveredItem(null)}
                     whileHover={{ 
                       boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
                       borderColor: '#007bff'
                     }}
                     transition={{ duration: 0.2 }}
                   >
-                    <div className="card-body text-center p-4">
+                    <div className="card-body text-center p-4 position-relative">
                       <motion.div 
                         className="mb-3"
                         whileHover={{ scale: 1.1 }}
@@ -348,6 +522,25 @@ const FileBrowser = () => {
                       <small className="text-muted">
                         {item.type === 'folder' ? 'Folder' : formatFileSize(item.size)}
                       </small>
+                      
+                      {/* Quick Delete Button - Shows on hover */}
+                      {hoveredItem === item.id && (
+                        <motion.button
+                          className="btn btn-sm btn-danger position-absolute top-0 start-0 m-2"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSingle(item);
+                          }}
+                          title="Delete"
+                        >
+                          <FaTrash size={12} />
+                        </motion.button>
+                      )}
+
+                      {/* Selection Checkmark */}
                       {selectedItems.includes(item.id) && (
                         <motion.div
                           className="position-absolute top-0 end-0 m-2"
@@ -403,19 +596,32 @@ const FileBrowser = () => {
                           {item.name}
                         </div>
                       </td>
-                      <td>{formatFileSize(item.size)}</td>
-                      <td>{new Date(item.modifiedAt).toLocaleDateString()}</td>
-                      <td>{item.owner}</td>
+                      <td>{item.type === 'folder' ? '-' : formatFileSize(item.size)}</td>
+                      <td>{new Date(item.updatedAt).toLocaleDateString()}</td>
+                      <td>{item.userId?.substring(0, 8) || 'Unknown'}</td>
                       <td>
                         <div className="btn-group btn-group-sm">
-                          <button className="btn btn-outline-secondary btn-sm">
+                          <button 
+                            className="btn btn-outline-secondary btn-sm"
+                            title="Download"
+                          >
                             <FaDownload />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm">
+                          <button 
+                            className="btn btn-outline-secondary btn-sm"
+                            title="Share"
+                          >
                             <FaShare />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm">
-                            <FaEllipsisV />
+                          <button 
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSingle(item);
+                            }}
+                            title="Delete"
+                          >
+                            <FaTrash />
                           </button>
                         </div>
                       </td>
@@ -425,18 +631,7 @@ const FileBrowser = () => {
               </table>
             </div>
           )}
-        </AnimatePresence>
-
-        {currentItems.length === 0 && (
-          <motion.div
-            className="text-center py-5"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <FaFolder size={64} className="text-muted mb-3" />
-            <h5 className="text-muted">No files or folders</h5>
-            <p className="text-muted">Upload files or create folders to get started</p>
-          </motion.div>
+          </AnimatePresence>
         )}
       </div>
 
@@ -517,7 +712,7 @@ const FileBrowser = () => {
             </button>
             <button 
               className="list-group-item list-group-item-action text-danger"
-              onClick={handleDelete}
+              onClick={() => contextMenuItem && handleDeleteSingle(contextMenuItem)}
             >
               <FaTrash className="me-2" />
               Delete

@@ -50,4 +50,31 @@ export async function ensureUsersTable() {
   }
 }
 
+export async function ensureFilesTable() {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS files (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      type ENUM('file', 'folder') NOT NULL,
+      path VARCHAR(1024) NULL,
+      size BIGINT NULL,
+      mime_type VARCHAR(255) NULL,
+      user_id VARCHAR(36) NOT NULL,
+      parent_id INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES files(id) ON DELETE CASCADE,
+      INDEX idx_user_parent (user_id, parent_id),
+      INDEX idx_type (type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `;
+  const conn = await getPool().getConnection();
+  try {
+    await conn.query(sql);
+  } finally {
+    conn.release();
+  }
+}
+
 export default getPool();
