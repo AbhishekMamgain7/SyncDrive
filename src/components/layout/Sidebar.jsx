@@ -16,39 +16,55 @@ import {
 } from 'react-icons/fa';
 
 const Sidebar = ({ activeTab, setActiveTab, user }) => {
-  const menuItems = [
-    {
-      id: 'files',
-      title: 'File Management',
-      icon: FaFolder,
-      items: [
-        { id: 'browse', label: 'Browse Files', icon: FaFolder },
-        { id: 'upload', label: 'Upload Files', icon: FaUpload },
-        { id: 'download', label: 'Downloads', icon: FaDownload },
-        { id: 'trash', label: 'Trash', icon: FaTrash }
-      ]
-    },
-    {
-      id: 'collaboration',
-      title: 'Collaboration',
-      icon: FaUsers,
-      items: [
-        { id: 'shared', label: 'Shared Files', icon: FaUsers },
-        { id: 'permissions', label: 'Permissions', icon: FaShieldAlt },
-        { id: 'history', label: 'Activity History', icon: FaHistory }
-      ]
-    },
-    {
-      id: 'system',
-      title: 'System Simulation',
-      icon: FaChartBar,
-      items: [
-        { id: 'memory', label: 'Memory Management', icon: FaMemory },
-        { id: 'processes', label: 'Process Scheduling', icon: FaCogs },
-        { id: 'network', label: 'Network Simulation', icon: FaNetworkWired }
-      ]
+  // Context-aware menu based on active tab
+  const getContextualMenu = () => {
+    switch(activeTab) {
+      case 'files':
+        return [
+          {
+            id: 'quick-actions',
+            title: 'Quick Actions',
+            icon: FaFolder,
+            items: [
+              { id: 'recent', label: 'Recent Files', icon: FaHistory },
+              { id: 'shared', label: 'Shared with me', icon: FaUsers },
+              { id: 'trash', label: 'Trash', icon: FaTrash }
+            ]
+          }
+        ];
+      case 'dashboard':
+        return [
+          {
+            id: 'dashboard-actions',
+            title: 'Dashboard',
+            icon: FaChartBar,
+            items: [
+              { id: 'refresh', label: 'Refresh Data', icon: FaHistory },
+              { id: 'export', label: 'Export Report', icon: FaDownload }
+            ]
+          }
+        ];
+      case 'memory':
+      case 'processes':
+      case 'deadlock':
+        return [
+          {
+            id: 'os-simulations',
+            title: 'OS Simulations',
+            icon: FaCogs,
+            items: [
+              { id: 'memory', label: 'Memory Management', icon: FaMemory },
+              { id: 'processes', label: 'Process Scheduling', icon: FaCogs },
+              { id: 'deadlock', label: 'Deadlock Detection', icon: FaShieldAlt }
+            ]
+          }
+        ];
+      default:
+        return [];
     }
-  ];
+  };
+
+  const menuItems = getContextualMenu();
 
   return (
     <motion.aside 
@@ -154,6 +170,33 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
             );
           })}
         </nav>
+      
+        {/* Storage Usage Widget */}
+        {activeTab === 'files' && (
+          <motion.div
+            className="mt-4 p-3 bg-white rounded-3 shadow-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <small className="text-dark fw-bold">Storage</small>
+              <small className="text-primary">68.5%</small>
+            </div>
+            <div className="progress" style={{ height: '8px' }}>
+              <div 
+                className="progress-bar bg-primary"
+                style={{ width: '68.5%' }}
+                role="progressbar"
+                aria-valuenow="68.5"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-label="Storage usage"
+              />
+            </div>
+            <small className="text-muted">6.85 GB of 10 GB used</small>
+          </motion.div>
+        )}
       </div>
     </motion.aside>
   );

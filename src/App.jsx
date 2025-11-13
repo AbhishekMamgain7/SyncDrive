@@ -40,6 +40,9 @@ const MainApp = () => {
 
   return (
     <div className="app-container">
+      <a href="#main-content" className="skip-to-main">
+        Skip to main content
+      </a>
       <Header 
         user={user} 
         onLogout={logout}
@@ -54,7 +57,7 @@ const MainApp = () => {
           user={user}
         />
         
-        <div className="content-area flex-grow-1">
+        <div className="content-area flex-grow-1" id="main-content" role="main" tabIndex="-1">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

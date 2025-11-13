@@ -170,7 +170,16 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="dashboard">
+    <div className="dashboard p-4" role="main" aria-label="Dashboard">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-4"
+      >
+        <h2 className="mb-2">Dashboard Overview</h2>
+        <p className="text-muted">Real-time system monitoring and analytics</p>
+      </motion.div>
+      
       <div className="row">
         {/* System Overview Cards */}
         <div className="col-12 mb-4">

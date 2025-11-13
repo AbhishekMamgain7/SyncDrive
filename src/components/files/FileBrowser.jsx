@@ -53,6 +53,7 @@ const FileBrowser = () => {
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
   const [contextMenuItem, setContextMenuItem] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef(null);
 
   // Load root directory on mount
@@ -178,6 +179,44 @@ const FileBrowser = () => {
         }
       } catch (error) {
         // Error already handled by store
+      }
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      const currentFolderId = currentPath[currentPath.length - 1].id;
+      for (const file of files) {
+        try {
+          await uploadFile(file, currentFolderId);
+        } catch (error) {
+          // Error already handled by store
+        }
       }
     }
   };
@@ -391,18 +430,46 @@ const FileBrowser = () => {
 
           {/* Delete Button - Shows when items are selected */}
           {selectedItems.length > 0 && (
-            <motion.button 
-              className="btn btn-danger shadow-sm"
-              onClick={handleDeleteSelected}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            <motion.div
+              className="position-fixed bottom-0 start-50 translate-middle-x mb-4 bg-white rounded-pill shadow-lg p-3 d-flex align-items-center gap-3"
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              style={{ zIndex: 1000 }}
             >
-              <FaTrash className="me-1" />
-              Delete ({selectedItems.length})
-            </motion.button>
+              <span className="fw-bold text-dark">
+                {selectedItems.length} item{selectedItems.length > 1 ? 's' : ''} selected
+              </span>
+              <div className="vr"></div>
+              <motion.button
+                className="btn btn-sm btn-outline-secondary"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedItems([])}
+                aria-label="Deselect all"
+              >
+                Clear
+              </motion.button>
+              <motion.button
+                className="btn btn-sm btn-primary"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Download selected items"
+              >
+                <FaDownload className="me-1" />
+                Download
+              </motion.button>
+              <motion.button
+                className="btn btn-sm btn-danger"
+                onClick={handleDeleteSelected}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label="Delete selected items"
+              >
+                <FaTrash className="me-1" />
+                Delete
+              </motion.button>
+            </motion.div>
           )}
 
           {/* Hidden file input */}
@@ -417,12 +484,47 @@ const FileBrowser = () => {
       </motion.div>
 
       {/* File Grid/List */}
-      <div className="flex-grow-1 p-4 overflow-auto bg-light">
+      <div 
+        className={`flex-grow-1 p-4 overflow-auto bg-light position-relative ${isDragging ? 'drag-active' : ''}`}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drag overlay */}
+        {isDragging && (
+          <motion.div
+            className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{
+              background: 'rgba(102, 126, 234, 0.1)',
+              border: '3px dashed #667eea',
+              zIndex: 1000,
+              pointerEvents: 'none'
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="text-center">
+              <FaUpload size={64} className="text-primary mb-3" />
+              <h4 className="text-primary">Drop files here to upload</h4>
+            </div>
+          </motion.div>
+        )}
         {/* Loading State */}
         {isLoading && (
-          <div className="d-flex justify-content-center align-items-center py-5">
-            <FaSpinner className="fa-spin text-primary me-2" size={24} />
-            <span className="text-muted">Loading files...</span>
+          <div className="row g-4">
+            {[...Array(8)].map((_, index) => (
+              <div key={index} className="col-lg-2 col-md-3 col-sm-4 col-6">
+                <div className="card border-0 shadow-sm">
+                  <div className="card-body p-4">
+                    <div className="skeleton skeleton-avatar mx-auto mb-3"></div>
+                    <div className="skeleton skeleton-text"></div>
+                    <div className="skeleton skeleton-text" style={{ width: '60%', margin: '0 auto' }}></div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -449,20 +551,41 @@ const FileBrowser = () => {
         {/* Empty State */}
         {!isLoading && !error && currentItems.length === 0 && (
           <motion.div
-            className="text-center py-5"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            className="empty-state"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
           >
-            <FaFolder size={64} className="text-muted mb-3" />
-            <h5 className="text-muted">This folder is empty</h5>
-            <p className="text-muted">Upload files or create folders to get started</p>
-            <button 
-              className="btn btn-primary mt-3"
-              onClick={() => setShowCreateFolder(true)}
-            >
-              <FaPlus className="me-2" />
-              Create Folder
-            </button>
+            <div className="empty-state-icon">
+              <FaFolder />
+            </div>
+            <h3 className="empty-state-title">This folder is empty</h3>
+            <p className="empty-state-description">
+              Upload files or create folders to get started with your file management
+            </p>
+            <div className="d-flex gap-2 justify-content-center">
+              <motion.button 
+                className="btn btn-primary"
+                onClick={() => setShowCreateFolder(true)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <FaPlus className="me-2" />
+                Create Folder
+              </motion.button>
+              <motion.button 
+                className="btn btn-success"
+                onClick={handleUploadClick}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <FaUpload className="me-2" />
+                Upload File
+              </motion.button>
+            </div>
+            <small className="text-muted mt-3 d-block">
+              Tip: You can also drag and drop files here
+            </small>
           </motion.div>
         )}
 

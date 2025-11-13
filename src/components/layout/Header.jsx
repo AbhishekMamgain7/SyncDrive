@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { 
   FaUser, 
@@ -8,10 +8,34 @@ import {
   FaFolder,
   FaChartLine,
   FaMemory,
-  FaCogs
+  FaCogs,
+  FaFile,
+  FaFolderOpen,
+  FaTrash,
+  FaShare
 } from 'react-icons/fa';
 
 const Header = ({ user, onLogout, activeTab, setActiveTab }) => {
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const notificationRef = useRef(null);
+  
+  // Close notification panel when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationPanelOpen(false);
+      }
+    };
+    
+    if (notificationPanelOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [notificationPanelOpen]);
+  
   const tabs = [
     { id: 'files', label: 'Files', icon: FaFolder },
     { id: 'dashboard', label: 'Dashboard', icon: FaChartLine },
@@ -98,7 +122,7 @@ const Header = ({ user, onLogout, activeTab, setActiveTab }) => {
 
         <div className="navbar-nav">
           <motion.button 
-            className="nav-link btn btn-link text-white position-relative rounded-3 px-3 py-2 mx-1"
+            className="nav-link btn btn-link text-white position-relative rounded-3 px-3 py-2 mx-1 notification-button"
             whileHover={{ 
               scale: 1.05, 
               backgroundColor: 'rgba(255,255,255,0.15)',
@@ -106,10 +130,11 @@ const Header = ({ user, onLogout, activeTab, setActiveTab }) => {
             }}
             whileTap={{ scale: 0.95 }}
             style={{ backdropFilter: 'blur(10px)' }}
+            onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
           >
-            <FaBell size={18} />
+            <FaBell size={20} className="notification-bell" />
             <motion.span 
-              className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5 }}
@@ -117,6 +142,71 @@ const Header = ({ user, onLogout, activeTab, setActiveTab }) => {
               3
             </motion.span>
           </motion.button>
+          
+          {/* Notification Panel */}
+          {notificationPanelOpen && (
+            <motion.div 
+              ref={notificationRef}
+              className="position-absolute notification-panel shadow-lg rounded-3"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              style={{
+                top: '100%',
+                right: '180px',
+                width: '350px',
+                zIndex: 1050,
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(15px)',
+                border: '1px solid rgba(255, 255, 255, 0.2)'
+              }}
+            >
+              <div className="p-3 border-bottom">
+                <h6 className="mb-0">Notifications</h6>
+              </div>
+              <div className="notification-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <div className="notification-item border-bottom p-3">
+                  <div className="d-flex">
+                    <div className="notification-icon bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3">
+                      <FaFile className="text-primary" size={18} />
+                    </div>
+                    <div className="flex-grow-1">
+                      <h6 className="mb-1">New File Uploaded</h6>
+                      <p className="mb-1 text-muted small">Your file 'document.pdf' has been uploaded successfully.</p>
+                      <small className="text-muted">2 minutes ago</small>
+                    </div>
+                  </div>
+                </div>
+                <div className="notification-item border-bottom p-3">
+                  <div className="d-flex">
+                    <div className="notification-icon bg-success bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3">
+                      <FaFolderOpen className="text-success" size={18} />
+                    </div>
+                    <div className="flex-grow-1">
+                      <h6 className="mb-1">Folder Created</h6>
+                      <p className="mb-1 text-muted small">New folder 'Projects' has been created.</p>
+                      <small className="text-muted">15 minutes ago</small>
+                    </div>
+                  </div>
+                </div>
+                <div className="notification-item p-3">
+                  <div className="d-flex">
+                    <div className="notification-icon bg-warning bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3">
+                      <FaShare className="text-warning" size={18} />
+                    </div>
+                    <div className="flex-grow-1">
+                      <h6 className="mb-1">File Shared</h6>
+                      <p className="mb-1 text-muted small">'report.docx' has been shared with you by John Doe.</p>
+                      <small className="text-muted">1 hour ago</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2 border-top text-center">
+                <button className="btn btn-sm btn-link text-decoration-none">View All Notifications</button>
+              </div>
+            </motion.div>
+          )}
           
           <motion.button 
             className="nav-link btn btn-link text-white rounded-3 px-3 py-2 mx-1"
