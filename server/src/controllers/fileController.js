@@ -21,8 +21,9 @@ export const listFiles = async (req, res) => {
 
       // If parentId is not provided, null, or 'null', fetch root directory items
       if (!parentId || parentId === 'null' || parentId === 'undefined') {
-        query = `
-          SELECT 
+        // Get user's own folders
+        const [ownFolders] = await conn.query(
+          `SELECT 
             id,
             name,
             type,
@@ -32,12 +33,46 @@ export const listFiles = async (req, res) => {
             user_id as userId,
             parent_id as parentId,
             created_at as createdAt,
-            updated_at as updatedAt
+            updated_at as updatedAt,
+            NULL as sharedBy,
+            NULL as permission
           FROM files
           WHERE user_id = ? AND parent_id IS NULL
-          ORDER BY type DESC, name ASC
-        `;
-        params = [userId];
+          ORDER BY type DESC, name ASC`,
+          [userId]
+        );
+
+        // Get shared folders added to My Files
+        const [sharedFolders] = await conn.query(
+          `SELECT 
+            f.id,
+            f.name,
+            f.type,
+            f.path,
+            f.size,
+            f.mime_type as mimeType,
+            f.user_id as userId,
+            f.parent_id as parentId,
+            f.created_at as createdAt,
+            f.updated_at as updatedAt,
+            u.name as sharedBy,
+            sf.permission
+          FROM shared_folders sf
+          JOIN files f ON sf.folder_id = f.id
+          JOIN users u ON sf.owner_id = u.id
+          WHERE sf.shared_with_user_id = ? AND sf.added_to_my_files = TRUE
+          ORDER BY f.name ASC`,
+          [userId]
+        );
+
+        // Combine own and shared folders
+        const allItems = [...ownFolders, ...sharedFolders];
+
+        res.json({
+          success: true,
+          data: allItems,
+          count: allItems.length
+        });
       } else {
         // Check if user has access to this folder (owner or shared)
         const [folderCheck] = await conn.query(
@@ -71,8 +106,8 @@ export const listFiles = async (req, res) => {
           [parseInt(parentId)]
         );
 
-        query = `
-          SELECT 
+        const [rows] = await conn.query(
+          `SELECT 
             id,
             name,
             type,
@@ -85,19 +120,17 @@ export const listFiles = async (req, res) => {
             updated_at as updatedAt
           FROM files
           WHERE user_id = ? AND parent_id = ?
-          ORDER BY type DESC, name ASC
-        `;
-        params = [ownerInfo[0].user_id, parseInt(parentId)];
+          ORDER BY type DESC, name ASC`,
+          [ownerInfo[0].user_id, parseInt(parentId)]
+        );
+
+        // Return the list of files and folders
+        res.json({
+          success: true,
+          data: rows,
+          count: rows.length
+        });
       }
-
-      const [rows] = await conn.query(query, params);
-
-      // Return the list of files and folders
-      res.json({
-        success: true,
-        data: rows,
-        count: rows.length
-      });
       
     } finally {
       conn.release();

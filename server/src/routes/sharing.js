@@ -175,6 +175,7 @@ router.get('/shared-with-me', async (req, res) => {
           f.created_at as createdAt,
           f.updated_at as updatedAt,
           sf.permission,
+          sf.added_to_my_files as addedToMyFiles,
           sf.shared_at as sharedAt,
           u.name as ownerName,
           u.email as ownerEmail
@@ -351,6 +352,92 @@ router.delete('/folder/:folderId/user/:userId', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to remove user'
+    });
+  }
+});
+
+/**
+ * Add shared folder to My Files
+ * POST /api/sharing/add-to-my-files/:folderId
+ */
+router.post('/add-to-my-files/:folderId', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const userId = req.user.id;
+
+    const conn = await getPool().getConnection();
+    try {
+      // Check if folder is shared with user
+      const [sharing] = await conn.query(
+        'SELECT id FROM shared_folders WHERE folder_id = ? AND shared_with_user_id = ?',
+        [folderId, userId]
+      );
+
+      if (sharing.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Folder not shared with you'
+        });
+      }
+
+      // Update added_to_my_files flag
+      await conn.query(
+        'UPDATE shared_folders SET added_to_my_files = TRUE WHERE id = ?',
+        [sharing[0].id]
+      );
+
+      res.json({
+        success: true,
+        message: 'Folder added to My Files'
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Add to my files error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add folder'
+    });
+  }
+});
+
+/**
+ * Remove shared folder from My Files
+ * DELETE /api/sharing/remove-from-my-files/:folderId
+ */
+router.delete('/remove-from-my-files/:folderId', async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const userId = req.user.id;
+
+    const conn = await getPool().getConnection();
+    try {
+      // Update added_to_my_files flag
+      const [result] = await conn.query(
+        'UPDATE shared_folders SET added_to_my_files = FALSE WHERE folder_id = ? AND shared_with_user_id = ?',
+        [folderId, userId]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Folder not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Folder removed from My Files'
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Remove from my files error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to remove folder'
     });
   }
 });

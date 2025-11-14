@@ -289,18 +289,32 @@ export async function ensureSharedFoldersTable() {
       owner_id VARCHAR(36) NOT NULL,
       shared_with_user_id VARCHAR(36) NOT NULL,
       permission ENUM('viewer', 'editor', 'admin') DEFAULT 'viewer',
+      added_to_my_files BOOLEAN DEFAULT FALSE,
       shared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (folder_id) REFERENCES files(id) ON DELETE CASCADE,
       FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (shared_with_user_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE KEY unique_share (folder_id, shared_with_user_id),
       INDEX idx_shared_with (shared_with_user_id),
-      INDEX idx_folder (folder_id)
+      INDEX idx_folder (folder_id),
+      INDEX idx_added_to_my_files (shared_with_user_id, added_to_my_files)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `;
   const conn = await getPool().getConnection();
   try {
     await conn.query(sql);
+    
+    // Add added_to_my_files column if it doesn't exist
+    const [columns] = await conn.query(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shared_folders'",
+      [DB_NAME]
+    );
+    const existingColumnNames = columns.map(col => col.COLUMN_NAME);
+    
+    if (!existingColumnNames.includes('added_to_my_files')) {
+      await conn.query('ALTER TABLE shared_folders ADD COLUMN added_to_my_files BOOLEAN DEFAULT FALSE');
+      console.log('✓ Added column shared_folders.added_to_my_files');
+    }
   } finally {
     conn.release();
   }

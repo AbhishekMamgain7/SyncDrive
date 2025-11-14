@@ -16,6 +16,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 const SharedWithMe = ({ onNavigateToFolder }) => {
   const [sharedFolders, setSharedFolders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [addingFolder, setAddingFolder] = useState(null);
 
   useEffect(() => {
     fetchSharedFolders();
@@ -44,6 +45,51 @@ const SharedWithMe = ({ onNavigateToFolder }) => {
       toast.error('Failed to load shared folders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddToMyFiles = async (folder) => {
+    setAddingFolder(folder.id);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_URL}/sharing/add-to-my-files/${folder.id}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Folder added to My Files');
+        fetchSharedFolders();
+      } else {
+        toast.error(data.error || 'Failed to add folder');
+      }
+    } catch (error) {
+      console.error('Add to my files error:', error);
+      toast.error('Failed to add folder');
+    } finally {
+      setAddingFolder(null);
+    }
+  };
+
+  const handleRemoveFromMyFiles = async (folder) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${API_URL}/sharing/remove-from-my-files/${folder.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Folder removed from My Files');
+        fetchSharedFolders();
+      } else {
+        toast.error(data.error || 'Failed to remove folder');
+      }
+    } catch (error) {
+      console.error('Remove from my files error:', error);
+      toast.error('Failed to remove folder');
     }
   };
 
@@ -155,13 +201,33 @@ const SharedWithMe = ({ onNavigateToFolder }) => {
                     </small>
                   </div>
 
-                  <button
-                    className="btn btn-primary w-100"
-                    onClick={() => onNavigateToFolder && onNavigateToFolder(folder)}
-                  >
-                    <FaExternalLinkAlt className="me-2" />
-                    Open Folder
-                  </button>
+                  {folder.addedToMyFiles ? (
+                    <button
+                      className="btn btn-outline-danger w-100"
+                      onClick={() => handleRemoveFromMyFiles(folder)}
+                    >
+                      <FaExternalLinkAlt className="me-2" />
+                      Remove from My Files
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary w-100"
+                      onClick={() => handleAddToMyFiles(folder)}
+                      disabled={addingFolder === folder.id}
+                    >
+                      {addingFolder === folder.id ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <FaExternalLinkAlt className="me-2" />
+                          Add to My Files
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </motion.div>
             </div>

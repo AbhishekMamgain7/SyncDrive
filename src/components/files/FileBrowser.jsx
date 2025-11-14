@@ -17,7 +17,8 @@ import {
   FaCopy,
   FaCheck,
   FaSpinner,
-  FaHistory
+  FaHistory,
+  FaUserFriends
 } from 'react-icons/fa';
 import useFileStore from '../../store/fileStore';
 import { useWebSocket } from '../../hooks/useWebSocket';
@@ -687,6 +688,14 @@ const FileBrowser = () => {
                       <h6 className="card-title text-truncate fw-bold" title={item.name}>
                         {item.name}
                       </h6>
+                      {item.sharedBy && (
+                        <div className="mb-1">
+                          <span className="badge bg-info text-white" style={{ fontSize: '0.7rem' }}>
+                            <FaUserFriends className="me-1" size={10} />
+                            {item.sharedBy}
+                          </span>
+                        </div>
+                      )}
                       <small className="text-muted">
                         {item.type === 'folder' ? 'Folder' : formatFileSize(item.size)}
                       </small>
@@ -762,6 +771,12 @@ const FileBrowser = () => {
                             )}
                           </span>
                           {item.name}
+                          {item.sharedBy && (
+                            <span className="badge bg-info text-white ms-2" style={{ fontSize: '0.65rem' }}>
+                              <FaUserFriends className="me-1" size={8} />
+                              {item.sharedBy}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td>{item.type === 'folder' ? '-' : formatFileSize(item.size)}</td>
