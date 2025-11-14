@@ -39,7 +39,38 @@ export const listFiles = async (req, res) => {
         `;
         params = [userId];
       } else {
-        // Fetch items with specific parent_id
+        // Check if user has access to this folder (owner or shared)
+        const [folderCheck] = await conn.query(
+          `SELECT f.user_id, sf.permission 
+           FROM files f
+           LEFT JOIN shared_folders sf ON f.id = sf.folder_id AND sf.shared_with_user_id = ?
+           WHERE f.id = ? AND f.type = 'folder'`,
+          [userId, parseInt(parentId)]
+        );
+
+        if (folderCheck.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Folder not found'
+          });
+        }
+
+        const isOwner = folderCheck[0].user_id === userId;
+        const hasSharedAccess = folderCheck[0].permission !== null;
+
+        if (!isOwner && !hasSharedAccess) {
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied to this folder'
+          });
+        }
+
+        // Fetch items with specific parent_id (owned by the folder owner)
+        const [ownerInfo] = await conn.query(
+          'SELECT user_id FROM files WHERE id = ?',
+          [parseInt(parentId)]
+        );
+
         query = `
           SELECT 
             id,
@@ -56,7 +87,7 @@ export const listFiles = async (req, res) => {
           WHERE user_id = ? AND parent_id = ?
           ORDER BY type DESC, name ASC
         `;
-        params = [userId, parseInt(parentId)];
+        params = [ownerInfo[0].user_id, parseInt(parentId)];
       }
 
       const [rows] = await conn.query(query, params);
@@ -398,12 +429,49 @@ export const uploadFile = async (req, res) => {
 
     const conn = await getPool().getConnection();
     try {
+      let targetUserId = userId; // Default to current user
+      let canUpload = true;
+
+      // If uploading to a folder, check permissions
+      if (parentId) {
+        const [folderCheck] = await conn.query(
+          `SELECT f.user_id, sf.permission 
+           FROM files f
+           LEFT JOIN shared_folders sf ON f.id = sf.folder_id AND sf.shared_with_user_id = ?
+           WHERE f.id = ? AND f.type = 'folder'`,
+          [userId, parseInt(parentId)]
+        );
+
+        if (folderCheck.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Folder not found'
+          });
+        }
+
+        const isOwner = folderCheck[0].user_id === userId;
+        const permission = folderCheck[0].permission;
+
+        // Check if user can upload
+        if (!isOwner) {
+          if (!permission || permission === 'viewer') {
+            return res.status(403).json({
+              success: false,
+              error: 'You do not have permission to upload files to this folder'
+            });
+          }
+        }
+
+        // Files should be owned by the folder owner
+        targetUserId = folderCheck[0].user_id;
+      }
+
       // Check if file with same name exists in the same parent
       const checkQuery = `
         SELECT id FROM files 
         WHERE user_id = ? AND name = ? AND type = 'file' AND ${parentId ? 'parent_id = ?' : 'parent_id IS NULL'}
       `;
-      const checkParams = parentId ? [userId, originalname, parseInt(parentId)] : [userId, originalname];
+      const checkParams = parentId ? [targetUserId, originalname, parseInt(parentId)] : [targetUserId, originalname];
       const [existing] = await conn.query(checkQuery, checkParams);
 
       if (existing.length > 0) {
@@ -423,7 +491,7 @@ export const uploadFile = async (req, res) => {
         filePath,
         size,
         mimetype,
-        userId,
+        targetUserId,
         parentId ? parseInt(parentId) : null
       ];
       

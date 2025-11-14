@@ -25,11 +25,16 @@ export const useWebSocket = () => {
         console.log('WebSocket connected');
         setIsConnected(true);
         
-        // Send authentication
-        ws.current.send(JSON.stringify({
-          type: 'auth',
-          token
-        }));
+        // Wait a bit for connection to be fully established
+        setTimeout(() => {
+          if (ws.current?.readyState === WebSocket.OPEN) {
+            // Send authentication
+            ws.current.send(JSON.stringify({
+              type: 'auth',
+              token
+            }));
+          }
+        }, 100);
 
         // Start ping interval
         pingInterval.current = setInterval(() => {
@@ -112,6 +117,28 @@ export const useWebSocket = () => {
               const typingHandlers = messageHandlers.current.get('user_typing');
               if (typingHandlers) {
                 typingHandlers.forEach(handler => handler(data));
+              }
+              break;
+
+            case 'notification':
+              // Handle incoming notifications
+              toast(data.title, {
+                duration: 4000,
+                icon: data.type === 'share' ? '📁' : '🔔'
+              });
+              
+              // Call registered handlers
+              const notifHandlers = messageHandlers.current.get('notification');
+              if (notifHandlers) {
+                notifHandlers.forEach(handler => handler(data));
+              }
+              break;
+
+            case 'unread_count':
+              // Call registered handlers for unread count updates
+              const countHandlers = messageHandlers.current.get('unread_count');
+              if (countHandlers) {
+                countHandlers.forEach(handler => handler(data));
               }
               break;
 

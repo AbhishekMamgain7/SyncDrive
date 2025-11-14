@@ -40,11 +40,14 @@ export async function createNotification({
   try {
     const conn = await getPool().getConnection();
     try {
+      // Ensure data is properly stringified
+      const dataString = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : null;
+      
       // Insert notification
       const [result] = await conn.query(
         `INSERT INTO notifications (user_id, type, title, message, data, priority, action_url)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [userId, type, title, message, data ? JSON.stringify(data) : null, priority, actionUrl]
+        [userId, type, title, message, dataString, priority, actionUrl]
       );
 
       const notificationId = result.insertId;
@@ -61,7 +64,7 @@ export async function createNotification({
 
       const notif = {
         ...notification[0],
-        data: notification[0].data ? JSON.parse(notification[0].data) : null
+        data: notification[0].data ? (typeof notification[0].data === 'string' ? JSON.parse(notification[0].data) : notification[0].data) : null
       };
 
       // Broadcast to user via WebSocket

@@ -54,6 +54,8 @@ const ShareFolderModal = ({ folder, onClose, onUpdate }) => {
     }
 
     setLoading(true);
+    console.log('📤 Sharing folder:', { folderId: folder.id, userEmail, permission });
+    
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`${API_URL}/sharing/share`, {
@@ -70,6 +72,7 @@ const ShareFolderModal = ({ folder, onClose, onUpdate }) => {
       });
 
       const data = await response.json();
+      console.log('📦 Share response:', data);
 
       if (data.success) {
         toast.success(data.message);

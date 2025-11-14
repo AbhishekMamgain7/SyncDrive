@@ -13,23 +13,32 @@ import AuthPage from './components/auth/AuthPage';
 import AuditDashboard from './components/admin/AuditDashboard';
 import AdminPanel from './components/admin/AdminPanel';
 import SharedWithMe from './components/sharing/SharedWithMe';
+import useFileStore from './store/fileStore';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
 const MainApp = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('files');
+  const { navigateToFolder, updateCurrentPath } = useFileStore();
+
+  const handleNavigateToSharedFolder = (folder) => {
+    // Update the path to show the shared folder
+    updateCurrentPath([
+      { id: null, name: 'Home' },
+      { id: folder.id, name: folder.name }
+    ]);
+    // Navigate to files tab and load the folder
+    setActiveTab('files');
+    navigateToFolder(folder);
+  };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'files':
         return <FileBrowser />;
       case 'shared':
-        return <SharedWithMe onNavigateToFolder={(folder) => {
-          // Navigate to the shared folder
-          setActiveTab('files');
-          // The folder will be handled by FileBrowser state
-        }} />;
+        return <SharedWithMe onNavigateToFolder={handleNavigateToSharedFolder} />;
       case 'dashboard':
         return <Dashboard />;
       case 'memory':
