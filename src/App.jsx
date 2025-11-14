@@ -10,6 +10,9 @@ import MemoryManagement from './components/os/MemoryManagement';
 import ProcessScheduling from './components/os/ProcessScheduling';
 import DeadlockDetection from './components/os/DeadlockDetection';
 import AuthPage from './components/auth/AuthPage';
+import AuditDashboard from './components/admin/AuditDashboard';
+import AdminPanel from './components/admin/AdminPanel';
+import SharedWithMe from './components/sharing/SharedWithMe';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
@@ -21,6 +24,12 @@ const MainApp = () => {
     switch (activeTab) {
       case 'files':
         return <FileBrowser />;
+      case 'shared':
+        return <SharedWithMe onNavigateToFolder={(folder) => {
+          // Navigate to the shared folder
+          setActiveTab('files');
+          // The folder will be handled by FileBrowser state
+        }} />;
       case 'dashboard':
         return <Dashboard />;
       case 'memory':
@@ -29,6 +38,10 @@ const MainApp = () => {
         return <ProcessScheduling />;
       case 'deadlock':
         return <DeadlockDetection />;
+      case 'audit':
+        return user?.role === 'admin' ? <AuditDashboard /> : <FileBrowser />;
+      case 'admin':
+        return user?.role === 'admin' ? <AdminPanel /> : <FileBrowser />;
       default:
         return <FileBrowser />;
     }

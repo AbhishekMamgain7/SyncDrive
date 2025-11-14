@@ -16,9 +16,15 @@ import {
   FaShare,
   FaCopy,
   FaCheck,
-  FaSpinner
+  FaSpinner,
+  FaHistory
 } from 'react-icons/fa';
 import useFileStore from '../../store/fileStore';
+import { useWebSocket } from '../../hooks/useWebSocket';
+import UserPresence from '../collaboration/UserPresence';
+import FileVersionHistory from './FileVersionHistory';
+import AdvancedSearch from '../search/AdvancedSearch';
+import ShareFolderModal from '../sharing/ShareFolderModal';
 
 const FileBrowser = () => {
   const {
@@ -54,12 +60,46 @@ const FileBrowser = () => {
   const [contextMenuItem, setContextMenuItem] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [versionFile, setVersionFile] = useState(null);
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareFolder, setShareFolder] = useState(null);
   const fileInputRef = React.useRef(null);
+
+  // WebSocket for real-time collaboration
+  const {
+    isConnected,
+    activeUsers,
+    folderViewers,
+    navigateToFolder: wsNavigateToFolder,
+    onMessage
+  } = useWebSocket();
 
   // Load root directory on mount
   useEffect(() => {
     fetchFiles(null);
   }, []);
+
+  // WebSocket: Listen for file changes
+  useEffect(() => {
+    const cleanup = onMessage('file_changed', (data) => {
+      const currentFolderId = currentPath[currentPath.length - 1]?.id;
+      
+      // Refresh if the change is in the current folder
+      if (data.folderId === currentFolderId || (data.folderId === null && currentFolderId === null)) {
+        fetchFiles(currentFolderId);
+      }
+    });
+
+    return cleanup;
+  }, [onMessage, currentPath, fetchFiles]);
+
+  // WebSocket: Notify when navigating to a folder
+  useEffect(() => {
+    const currentFolderId = currentPath[currentPath.length - 1]?.id;
+    wsNavigateToFolder(currentFolderId || null);
+  }, [currentPath, wsNavigateToFolder]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -309,19 +349,24 @@ const FileBrowser = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <div className="input-group shadow-sm" style={{ width: '280px' }}>
-            <span className="input-group-text bg-white border-end-0">
-              <FaSearch className="text-muted" />
-            </span>
-            <input
-              type="text"
-              className="form-control border-start-0"
-              placeholder="Search files and folders..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ boxShadow: 'none' }}
-            />
-          </div>
+          {/* User Presence Indicator */}
+          <UserPresence 
+            activeUsers={activeUsers}
+            folderViewers={folderViewers}
+            isConnected={isConnected}
+          />
+
+          <div className="vr" style={{ height: '30px' }}></div>
+          <motion.button
+            className="btn btn-outline-primary shadow-sm d-flex align-items-center gap-2"
+            onClick={() => setShowAdvancedSearch(true)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            style={{ minWidth: '280px' }}
+          >
+            <FaSearch className="text-muted" />
+            <span className="text-muted">Search files and folders...</span>
+          </motion.button>
 
           <div className="btn-group shadow-sm" role="group">
             <motion.button
@@ -730,12 +775,32 @@ const FileBrowser = () => {
                           >
                             <FaDownload />
                           </button>
-                          <button 
-                            className="btn btn-outline-secondary btn-sm"
-                            title="Share"
-                          >
-                            <FaShare />
-                          </button>
+                          {item.type === 'file' && (
+                            <button 
+                              className="btn btn-outline-info btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVersionFile(item);
+                                setShowVersionHistory(true);
+                              }}
+                              title="Version History"
+                            >
+                              <FaHistory />
+                            </button>
+                          )}
+                          {item.type === 'folder' && (
+                            <button 
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareFolder(item);
+                                setShowShareModal(true);
+                              }}
+                              title="Share Folder"
+                            >
+                              <FaShare />
+                            </button>
+                          )}
                           <button 
                             className="btn btn-outline-danger btn-sm"
                             onClick={(e) => {
@@ -821,10 +886,30 @@ const FileBrowser = () => {
               <FaDownload className="me-2" />
               Download
             </button>
-            <button className="list-group-item list-group-item-action">
-              <FaShare className="me-2" />
-              Share
-            </button>
+            {contextMenuItem?.type === 'file' && (
+              <button 
+                className="list-group-item list-group-item-action"
+                onClick={() => {
+                  setVersionFile(contextMenuItem);
+                  setShowVersionHistory(true);
+                }}
+              >
+                <FaHistory className="me-2" />
+                Version History
+              </button>
+            )}
+            {contextMenuItem?.type === 'folder' && (
+              <button 
+                className="list-group-item list-group-item-action"
+                onClick={() => {
+                  setShareFolder(contextMenuItem);
+                  setShowShareModal(true);
+                }}
+              >
+                <FaShare className="me-2" />
+                Share Folder
+              </button>
+            )}
             <button className="list-group-item list-group-item-action">
               <FaCopy className="me-2" />
               Copy
@@ -842,6 +927,51 @@ const FileBrowser = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Version History Modal */}
+      {showVersionHistory && versionFile && (
+        <FileVersionHistory
+          file={versionFile}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setVersionFile(null);
+          }}
+          onRestore={() => {
+            // Refresh files after restore
+            const currentFolderId = currentPath[currentPath.length - 1]?.id;
+            fetchFiles(currentFolderId);
+          }}
+        />
+      )}
+
+      {/* Advanced Search Modal */}
+      {showAdvancedSearch && (
+        <AdvancedSearch
+          onSelectFile={(file) => {
+            if (file.type === 'folder') {
+              navigateToFolder(file);
+            }
+            setShowAdvancedSearch(false);
+          }}
+          onClose={() => setShowAdvancedSearch(false)}
+        />
+      )}
+
+      {/* Share Folder Modal */}
+      {showShareModal && shareFolder && (
+        <ShareFolderModal
+          folder={shareFolder}
+          onClose={() => {
+            setShowShareModal(false);
+            setShareFolder(null);
+          }}
+          onUpdate={() => {
+            // Refresh files after sharing update
+            const currentFolderId = currentPath[currentPath.length - 1]?.id;
+            fetchFiles(currentFolderId);
+          }}
+        />
       )}
     </div>
   );

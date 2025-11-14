@@ -12,7 +12,8 @@ import {
   FaChartBar,
   FaMemory,
   FaCogs,
-  FaNetworkWired
+  FaNetworkWired,
+  FaUserFriends
 } from 'react-icons/fa';
 
 const Sidebar = ({ activeTab, setActiveTab, user }) => {
@@ -27,7 +28,7 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
             icon: FaFolder,
             items: [
               { id: 'recent', label: 'Recent Files', icon: FaHistory },
-              { id: 'shared', label: 'Shared with me', icon: FaUsers },
+              { id: 'shared', label: 'Shared with me', icon: FaUserFriends },
               { id: 'trash', label: 'Trash', icon: FaTrash }
             ]
           }
@@ -76,7 +77,7 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
     >
       <div className="p-3">
         <motion.div 
-          className="user-info mb-4 p-3 bg-white rounded-3 shadow-lg"
+          className="user-info mb-4 p-3 bg-gradient-primary rounded-3 shadow-lg"
           whileHover={{ scale: 1.02, boxShadow: "0 8px 25px rgba(0,0,0,0.15)" }}
           transition={{ duration: 0.2 }}
         >
@@ -90,9 +91,11 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
               {user?.name?.charAt(0) || 'U'}
             </motion.div>
             <div>
-              <div className="fw-bold text-dark">{user?.name || 'User'}</div>
-              <small className="text-primary fw-medium">{user?.role || 'User'}</small>
-              <div className="status-indicator status-online mt-1"></div>
+              <div className="fw-bold text-dark" style={{ fontSize: '14px' }}>{user?.name || 'User'}</div>
+              <small className="text-primary fw-medium" style={{ fontSize: '12px' }}>{user?.role || 'User'}</small>
+              <div className="d-flex align-items-center mt-1">
+                <div className="status-indicator status-online"></div>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -111,9 +114,10 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
                 <motion.div 
                   className="d-flex align-items-center mb-3 text-white"
                   whileHover={{ x: 5 }}
+                  style={{ minHeight: '24px' }}
                 >
-                  <SectionIcon className="me-2" size={16} />
-                  <small className="fw-bold text-uppercase">
+                  <SectionIcon className="me-2" size={16} style={{ flexShrink: 0 }} />
+                  <small className="fw-bold text-uppercase" style={{ lineHeight: 1.2 }}>
                     {section.title}
                   </small>
                 </motion.div>
@@ -174,7 +178,7 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
         {/* Storage Usage Widget */}
         {activeTab === 'files' && (
           <motion.div
-            className="mt-4 p-3 bg-white rounded-3 shadow-sm"
+            className="mt-4 p-3 bg-gradient-primary rounded-3 shadow-sm"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
@@ -194,7 +198,7 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
                 aria-label="Storage usage"
               />
             </div>
-            <small className="text-muted">6.85 GB of 10 GB used</small>
+            <small className="text-dark" style={{ opacity: 1.0 }}>6.85 GB of 10 GB used</small>
           </motion.div>
         )}
       </div>

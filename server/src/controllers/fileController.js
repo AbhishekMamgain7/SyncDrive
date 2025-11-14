@@ -1,4 +1,9 @@
 import { getPool } from '../db.js';
+import { broadcastFileOperation } from '../websocket.js';
+import { logAudit } from '../services/auditLogger.js';
+import { notifyFileOperation, notifyError } from '../services/notificationService.js';
+import { createFileVersion } from '../services/versionService.js';
+import fs from 'fs';
 
 /**
  * List files and folders for authenticated user
@@ -62,6 +67,7 @@ export const listFiles = async (req, res) => {
         data: rows,
         count: rows.length
       });
+      
     } finally {
       conn.release();
     }
@@ -136,6 +142,30 @@ export const createFolder = async (req, res) => {
         success: true,
         data: newFolder[0]
       });
+
+      // Log audit event
+      await logAudit({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        operationType: 'create',
+        entityType: 'folder',
+        entityId: result.insertId,
+        entityName: name.trim(),
+        parentFolderId: parentId ? parseInt(parentId) : null,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { size: 0, type: 'folder' }
+      });
+
+      // Broadcast folder creation
+      broadcastFileOperation(
+        'create',
+        newFolder[0],
+        parentId ? parseInt(parentId) : null,
+        userId,
+        req.user.name
+      );
     } finally {
       conn.release();
     }
@@ -168,7 +198,7 @@ export const deleteFile = async (req, res) => {
     try {
       // Verify the file belongs to the user
       const [file] = await conn.query(
-        'SELECT id, type FROM files WHERE id = ? AND user_id = ?',
+        'SELECT id, name, type, parent_id FROM files WHERE id = ? AND user_id = ?',
         [parseInt(id), userId]
       );
 
@@ -182,10 +212,38 @@ export const deleteFile = async (req, res) => {
       // Delete the file (cascade will handle children)
       await conn.query('DELETE FROM files WHERE id = ?', [parseInt(id)]);
 
+      // Log audit event
+      await logAudit({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        operationType: 'delete',
+        entityType: file[0].type,
+        entityId: parseInt(id),
+        entityName: file[0].name,
+        parentFolderId: file[0].parent_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { type: file[0].type }
+      });
+
       res.json({
         success: true,
         message: `${file[0].type === 'folder' ? 'Folder' : 'File'} deleted successfully`
       });
+
+      // Notify user of successful deletion
+      await notifyFileOperation(userId, 'delete', file[0].name, true);
+
+      // Broadcast deletion
+      const parentId = file[0].parent_id;
+      broadcastFileOperation(
+        'delete',
+        { id: parseInt(id), type: file[0].type, name: file[0].name },
+        parentId,
+        userId,
+        req.user.name
+      );
     } finally {
       conn.release();
     }
@@ -278,10 +336,34 @@ export const renameFile = async (req, res) => {
         [parseInt(id)]
       );
 
+      // Log audit event
+      await logAudit({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        operationType: 'rename',
+        entityType: file[0].type,
+        entityId: parseInt(id),
+        entityName: name.trim(),
+        parentFolderId: file[0].parent_id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { oldName: file[0].name, newName: name.trim(), type: file[0].type }
+      });
+
       res.json({
         success: true,
         data: updated[0]
       });
+
+      // Broadcast rename
+      broadcastFileOperation(
+        'rename',
+        updated[0],
+        file[0].parent_id,
+        userId,
+        req.user.name
+      );
     } finally {
       conn.release();
     }
@@ -364,11 +446,50 @@ export const uploadFile = async (req, res) => {
         [result.insertId]
       );
 
+      // Log audit event
+      await logAudit({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        operationType: 'upload',
+        entityType: 'file',
+        entityId: result.insertId,
+        entityName: originalname,
+        parentFolderId: parentId ? parseInt(parentId) : null,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { size, mimeType: mimetype, path: filePath }
+      });
+
       res.status(201).json({
         success: true,
         data: newFile[0],
         message: 'File uploaded successfully'
       });
+
+      // Notify user of successful upload
+      await notifyFileOperation(userId, 'upload', originalname, true);
+
+      // Create file version
+      await createFileVersion({
+        fileId: result.insertId,
+        filePath,
+        fileName: originalname,
+        fileSize: size,
+        mimeType: mimetype,
+        userId,
+        userName: req.user.name,
+        changeDescription: 'Initial upload'
+      });
+
+      // Broadcast file upload
+      broadcastFileOperation(
+        'upload',
+        newFile[0],
+        parentId ? parseInt(parentId) : null,
+        userId,
+        req.user.name
+      );
     } finally {
       conn.release();
     }
@@ -377,6 +498,88 @@ export const uploadFile = async (req, res) => {
     res.status(500).json({ 
       success: false,
       error: 'Failed to upload file' 
+    });
+  }
+};
+
+/**
+ * Download a file
+ * GET /api/files/download/:id
+ */
+export const downloadFile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    if (!id || isNaN(parseInt(id))) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Valid file ID is required' 
+      });
+    }
+
+    const conn = await getPool().getConnection();
+    try {
+      // Verify the file belongs to the user and get file details
+      const [file] = await conn.query(
+        'SELECT id, name, type, path, mime_type, size FROM files WHERE id = ? AND user_id = ? AND type = "file"',
+        [parseInt(id), userId]
+      );
+
+      if (file.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'File not found' 
+        });
+      }
+
+      const fileData = file[0];
+
+      // Check if file exists on disk
+      if (!fs.existsSync(fileData.path)) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'File not found on disk' 
+        });
+      }
+
+      // Log audit event
+      await logAudit({
+        userId,
+        userName: req.user.name,
+        userEmail: req.user.email,
+        operationType: 'download',
+        entityType: 'file',
+        entityId: parseInt(id),
+        entityName: fileData.name,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { size: fileData.size, mimeType: fileData.mime_type }
+      });
+
+      // Notify user of successful download
+      await notifyFileOperation(userId, 'download', fileData.name, true);
+
+      // Send file
+      res.download(fileData.path, fileData.name, (err) => {
+        if (err) {
+          console.error('Download error:', err);
+          if (!res.headersSent) {
+            res.status(500).json({ 
+              success: false,
+              error: 'Failed to download file' 
+            });
+          }
+        }
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Download file error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to download file' 
     });
   }
 };

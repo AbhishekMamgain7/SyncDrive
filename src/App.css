@@ -129,23 +129,23 @@ body {
 
 /* Active Tab Enhancement */
 .navbar-nav .nav-link.active {
-  background: rgba(255, 255, 255, 0.95) !important;
-  color: #000000 !important;
-  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.3) !important;
-  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  background: #764ba2 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 25px rgba(118, 75, 162, 0.4) !important;
+  border: 2px solid rgba(118, 75, 162, 0.5) !important;
 }
 
 .navbar-nav .nav-link.active * {
-  color: #000000 !important;
+  color: #ffffff !important;
 }
 
-/* Ensure active tab text is always black */
+/* Ensure active tab text is always white */
 .navbar-nav .nav-link.active,
 .navbar-nav .nav-link.active span,
 .navbar-nav .nav-link.active svg,
 .navbar-nav .nav-link.active i {
-  color: #000000 !important;
-  fill: #000000 !important;
+  color: #ffffff !important;
+  fill: #ffffff !important;
 }
 
 /* Notification Badge Enhancement */
@@ -164,6 +164,8 @@ body {
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   animation: bounce 2s infinite;
+  background-color: #dc3545 !important;
+  color: #ffffff !important;
 }
 
 /* Dropdown Enhancement */
@@ -190,6 +192,51 @@ body {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-right: none;
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+  color: #ffffff;
+}
+
+/* Ensure all sidebar text is white */
+.sidebar,
+.sidebar h3,
+.sidebar h4,
+.sidebar h5,
+.sidebar h6,
+.sidebar p,
+.sidebar span,
+.sidebar a,
+.sidebar label,
+.sidebar .text-muted,
+.sidebar small {
+  color: #ffffff !important;
+}
+
+/* Sidebar section headers */
+.sidebar .text-uppercase,
+.sidebar .fw-bold {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Storage section specific styling */
+.sidebar .card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.sidebar .card h6,
+.sidebar .card p,
+.sidebar .card small {
+  color: #ffffff !important;
+}
+
+.sidebar .progress {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar .progress-bar {
+  background: #ffffff;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -212,11 +259,20 @@ body {
 
 .user-info {
   background: rgba(255, 255, 255, 0.95);
-  color: #333;
+  color: #1f2937;
   border-radius: 16px;
   margin-bottom: 1.5rem;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* User info text should be dark for contrast */
+.user-info,
+.user-info h6,
+.user-info p,
+.user-info span,
+.user-info small {
+  color: #1f2937 !important;
 }
 
 .avatar {
@@ -959,4 +1015,66 @@ button:focus-visible {
 
 .shadow-strong {
   box-shadow: 0 8px 35px rgba(0, 0, 0, 0.15);
+}
+
+/* User Presence & Collaboration */
+.user-presence {
+  min-width: 150px;
+}
+
+.avatar-stack {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-circle {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.folder-viewers {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Real-time notification pulse */
+@keyframes notification-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+.notification-indicator {
+  animation: notification-pulse 2s infinite;
+}
+
+/* Admin Panel Styles */
+.admin-panel .card {
+  transition: all 0.3s ease;
+}
+
+.admin-panel .table-hover tbody tr:hover {
+  background-color: rgba(102, 126, 234, 0.05);
+  cursor: pointer;
+}
+
+.admin-panel .btn-group-sm .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.admin-panel .permission-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.admin-panel .modal {
+  z-index: 1060;
+}
+
+.admin-panel .badge {
+  font-weight: 500;
+  padding: 0.35em 0.65em;
 }

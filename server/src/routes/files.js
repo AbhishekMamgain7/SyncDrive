@@ -6,7 +6,8 @@ import {
   createFolder, 
   deleteFile, 
   renameFile,
-  uploadFile 
+  uploadFile,
+  downloadFile
 } from '../controllers/fileController.js';
 
 const router = express.Router();
@@ -57,5 +58,13 @@ router.delete('/:id', deleteFile);
  *   - name: New name
  */
 router.patch('/:id', renameFile);
+
+/**
+ * GET /api/files/download/:id
+ * Download a file
+ * Params:
+ *   - id: File ID
+ */
+router.get('/download/:id', downloadFile);
 
 export default router;
